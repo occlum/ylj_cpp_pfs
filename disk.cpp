@@ -7,7 +7,6 @@
 char disk[MAX_BLOCK][BLOCK_SIZE];
 char data_disk[BLOCK_SIZE];
 
-
 int disk_read(int block, char *buf)
 {
 	if(block < 0 || block >= MAX_BLOCK /*|| strlen(buf) < strlen(disk[block])*/) {
@@ -61,9 +60,6 @@ int data_disk_read(char *name, int block, char *buf)
 		fseek(fp, block * BLOCK_SIZE, 0);
 		fread(data_disk, BLOCK_SIZE, 1, fp);
 		memcpy(buf, data_disk, BLOCK_SIZE);
-		for (int i = 0; i < 512; i++)
-			printf("%c", data_disk[i]);
-		printf("\n");
 		fclose(fp);
 		return 1;
 	}
@@ -105,7 +101,6 @@ int small_sst_write(char *name, int sst_size, char *buf)
         }
         return 0;
 }
-
 
 int sst_read(char *name, int sst_size, char *buf)
 {
@@ -156,4 +151,3 @@ int sst_read_pos(int num, int pos, char *buf)
         }
         return 0;
 }
-

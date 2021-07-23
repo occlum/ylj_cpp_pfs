@@ -6,6 +6,7 @@
 #include <map>
 #include <iostream>
 #include <algorithm>
+#include <vector>
 #include "disk.h"
 #include "fs.h"
 #include "lsm.h"
@@ -119,17 +120,14 @@ int C0_to_C1()
 	lsm_C0.clear();
 
 	char sst_name[20];
-        snprintf(sst_name, sizeof(sst_name), "sst_%d", *sst_file_count);
-	sst_file_size[*sst_file_count] = sst_file.sst_size;
-	lsm_kv *mhbt_kv;
-	int mhbt_size = transform(sst_file.kv_array, sst_file.sst_size, &mhbt_kv);
-        //return file_write(sst_name, 0, sst_file.sst_size * sizeof(lsm_kv), (char *)(sst_file.kv_array));
-//	return small_sst_write(sst_name, sst_file.sst_size, (char *)(sst_file.kv_array));
-	sst_file_size[*sst_file_count] = mhbt_size / 16;
-	printf("%d\n", mhbt_size / 16);
+    snprintf(sst_name, sizeof(sst_name), "sst_%d", *sst_file_count);
+
+	vector<char> buf;
+	mhbt_write(sst_file.kv_array, sst_file.sst_size, buf);
+	sst_file_size[*sst_file_count] = buf.size() / 16;
 	(*sst_file_count)++;
-	small_sst_write(sst_name, mhbt_size / 16, (char *)mhbt_kv);
-	free(mhbt_kv);
+
+	sst_write(sst_name, buf.size() / 16, (char *)&buf[0]);
 }
 
 int lsm_insert(lsm_kv kv){
@@ -138,85 +136,42 @@ int lsm_insert(lsm_kv kv){
 		return C0_to_C1();*/
 }
 
-/*
-
 int data_write(int lba, char *buf, int pba){
-	int ret;
+    int ret;
 	char *data_file_name = "data";
-	string plaintext = buf;
-	string key = "0";
-
- 	size_t enc_msg_len = -1;
-	unsigned char *enc_msg = nullptr;
-        aes_128_gcm_encrypt0(buf, 128, key.c_str(), &enc_msg, enc_msg_len);
-	//printf("%d  %d\n", strlen(buf), strlen((char *)enc_msg));
-	ret = data_disk_write(data_file_name, pba, (char *)enc_msg);
-	lsm_kv kv(lba, -1, -1, pba);
-	lsm_insert(kv);
+	char key[16];
+	char mac[16];
+	char cipher_text[512];
 	printf("%s\n", buf);
-//	printf("xbuf %s\n", enc_msg);
-	free(enc_msg);
-	return ret;
-}
-
-int data_read(int lba, char *buf, int super_sst_count){
-	char *data_file_name = "data";
-	sst_count = super_sst_count;
-	lsm_kv kv = lsm_find(lba);
-	printf("pba  %d\n", kv.pba);
-	data_disk_read(data_file_name, kv.pba, buf);
-	for (int i = 0; i < 160; i++)
-		printf("%d ", buf[i]);
-	printf("\n");
-	char xbuf[160];
-	for (int i = 0; i < 160; i++)
-		xbuf[i] = buf[i + kv.pba];
-
-	string key = "0";
- 	unsigned char * dec_msg = nullptr;
-        size_t len_dec_msg = -1;
-        aes_128_gcm_decrypt0(xbuf, 160, key.c_str(), &dec_msg, len_dec_msg);
-
-	printf("len %d\n", len_dec_msg);
-	vector<unsigned char> ciphertext_final;
-        ciphertext_final.resize(len_dec_msg, '\0');
-        std::copy(dec_msg, dec_msg + len_dec_msg, ciphertext_final.begin());
-
-        for (int i = 0; i < len_dec_msg; i++) {
-                cout << dec_msg[i];
-        }
-        cout << endl;
-
-//	printf("%s\n", dec_msg);
-	free(dec_msg);
-	return 0;
-}
-*/
-
-int data_write(int lba, char *buf, int pba){
-        int ret;
-        char *data_file_name = "data";
-        ret = data_disk_write(data_file_name, pba, buf);
-	printf("%s\n", buf);
-        lsm_kv kv(lba, -1, -1, pba);
-        lsm_insert(kv);
-        return ret;
+	encrypt(buf, 512, cipher_text, key, mac);
+    ret = data_disk_write(data_file_name, pba, cipher_text);
+	int ki;
+	memcpy(&ki, key, 4);
+    lsm_kv kv(lba, ki, -1, pba);
+    lsm_insert(kv);
+    return ret;
 }
 
 int data_read(int lba, char *buf){
-        char *data_file_name = "data";
-	//lsm_kv kv;
-        lsm_kv kv = lsm_find(lba);
+    char *data_file_name = "data";
+    lsm_kv kv = lsm_find(lba);
 	if (kv.lba == -1) {
 		printf("Block %d not found!\n", lba);
 		return -1;
 	}
 	else {
-        	return data_disk_read(data_file_name, kv.pba, buf);	
+       	data_disk_read(data_file_name, kv.pba, buf);
+		char key[16];
+		char mac[16];
+		char *plain_text= new char[512];
+		memcpy(key, &kv.key, 4);
+		for (int i = 4; i < 16; i++)
+			key[i] = 0;
+		decrypt(&plain_text, 512, buf, key, mac);
+		printf("%s\n", plain_text);
+		free(plain_text);
 	}
 }
-
-
 
 int compaction(){          
 	//to do

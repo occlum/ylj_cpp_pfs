@@ -139,6 +139,10 @@ int read_mhbt(int num, int pos, int lba, lsm_kv *value){
 				key[i] = 0;
 			decrypt(&plain_text, 512, buf, key, mac);
 			kv = (lsm_kv*)plain_text;
+			put_to_cache(num, pos, layer, (char *)kv);
+		}
+		else{
+			printf("sst block find in cache!\n");
 		}
 	
 		for (j = 0; j < 32; j++)

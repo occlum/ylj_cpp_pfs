@@ -8,6 +8,7 @@
 #include "disk.h"
 #include "lsm.h"
 #include "crypt.h"
+#include "cache.h"
 
 using namespace std;
 
@@ -20,6 +21,7 @@ int main(int argc, char **argv)
 	fs_mount("meta");
 	printf("%% ");
 	aes_init();
+	init_cache();
 	char *c = new char(BLOCK_SIZE);
 	while(fgets(input, 256, stdin)) {
 		bzero(comm,64); 

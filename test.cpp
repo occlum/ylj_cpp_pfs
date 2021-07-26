@@ -17,11 +17,9 @@ int test_cache()
     char x[512], y[512];
     for (int i = 0; i < 512; i++)
         x[i] = i % 64;
-    put_cache(0, 0, x);
-    int k = in_cache(0, 0, y);
-    for (int i = 0; i < 512; i++)
-        printf("%d %d\n", x[i], y[i]);
-    printf("k  %d\n", k);
+    put_to_cache(0, 1, x);
+    int k = in_cache(0, 1, y);
+    delete_from_cache(0, 1);
 }
 
 int test_crypt()

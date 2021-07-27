@@ -55,3 +55,5 @@ int file_read(char *name, int offset, int size, char *readbuf);
 int file_write(char *name, int offset, int size, char *buf);
 int file_create(char *name ,int size);
 int file_remove(char *name);
+
+void write_test(int lba);

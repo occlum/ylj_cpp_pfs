@@ -144,8 +144,8 @@ int sst_read_pos(int num, int pos, char *buf)
         snprintf(name, sizeof(name), "sst_%d", num);
         FILE *fp = fopen(name, "r");
         if (fp != NULL) {
-                fseek(fp, pos * 512, 0);
-                fread(buf, 512, 1, fp);
+                fseek(fp, pos * BLOCK_SIZE, 0);
+                fread(buf, BLOCK_SIZE, 1, fp);
                 fclose(fp);
                 return 1;
         }

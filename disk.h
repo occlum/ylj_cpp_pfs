@@ -1,4 +1,4 @@
-#define BLOCK_SIZE 512
+#define BLOCK_SIZE 4096
 #define MAX_BLOCK 4096
 
 extern char disk[MAX_BLOCK][BLOCK_SIZE];

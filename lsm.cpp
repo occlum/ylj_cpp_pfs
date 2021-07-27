@@ -8,7 +8,6 @@
 #include <algorithm>
 #include <vector>
 #include "disk.h"
-#include "fs.h"
 #include "lsm.h"
 #include "crypt.h"
 #include "mhbt.h"
@@ -57,7 +56,7 @@ int small_sst_find(int num, int lba, lsm_kv *value)
 	char sst_file_name[20];
 	snprintf(sst_file_name, sizeof(sst_file_name), "sst_%d", num);
 
-	char buf[5120];
+	char buf[BLOCK_SIZE];
 //	int ret = file_read(sst_file_name, 0, BLOCK_SIZE, buf);
 	int ret = small_sst_read(sst_file_name, sst_file_size[num], buf);
 	if (ret < 0)
@@ -128,12 +127,13 @@ int C0_to_C1()
 	(*sst_file_count)++;
 
 	sst_write(sst_name, buf.size() / 16, (char *)&buf[0]);
+	delete[] sst_file.kv_array;
 }
 
 int lsm_insert(lsm_kv kv){
 	lsm_C0[kv.lba] = kv;
-/*	if (lsm_C0.size() > 100)
-		return C0_to_C1();*/
+	if (lsm_C0.size() > 6250000)
+		return C0_to_C1();
 }
 
 int data_write(int lba, char *buf, int pba){
@@ -141,9 +141,8 @@ int data_write(int lba, char *buf, int pba){
 	char *data_file_name = "data";
 	char key[16];
 	char mac[16];
-	char cipher_text[512];
-	printf("%s\n", buf);
-	encrypt(buf, 512, cipher_text, key, mac);
+	char cipher_text[BLOCK_SIZE];
+	encrypt(buf, BLOCK_SIZE, cipher_text, key, mac);
     ret = data_disk_write(data_file_name, pba, cipher_text);
 	int ki;
 	memcpy(&ki, key, 4);
@@ -163,13 +162,13 @@ int data_read(int lba, char *buf){
        	data_disk_read(data_file_name, kv.pba, buf);
 		char key[16];
 		char mac[16];
-		char *plain_text= new char[512];
+		char *plain_text= new char[BLOCK_SIZE];
 		memcpy(key, &kv.key, 4);
 		for (int i = 4; i < 16; i++)
 			key[i] = 0;
-		decrypt(&plain_text, 512, buf, key, mac);
-		printf("%s\n", plain_text);
-		free(plain_text);
+		decrypt(&plain_text, BLOCK_SIZE, buf, key, mac);
+		memcpy(buf, plain_text, BLOCK_SIZE);
+		delete[] plain_text;
 	}
 }
 

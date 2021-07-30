@@ -11,6 +11,10 @@
 #define MAX_LAYER 4
 using namespace std;
 
+
+int xxx = 0;
+
+
 int transform(lsm_kv *lv, int size, lsm_kv **mhbtv) {
 	vector<lsm_kv> q[MAX_LAYER];
 	vector<lsm_kv> m;
@@ -27,7 +31,6 @@ int transform(lsm_kv *lv, int size, lsm_kv **mhbtv) {
 		int j = 0;
 		while (q[j].size() == len){
 			int key = -1, mac = -1;
-			//getkey(&q[j][0], len, key, mac);
 			for (int k = 0; k < len; k++)
 				m.push_back(q[j][k]);
 			q[j + 1].push_back(lsm_kv(q[j][0].lba, key, mac, pos));
@@ -43,7 +46,6 @@ int transform(lsm_kv *lv, int size, lsm_kv **mhbtv) {
 			int padlen = len - q[j].size();
 			for (int i = 0; i < padlen; i++)
 				q[j].push_back(lsm_kv(-1, -1, -1, -1));
-				//getkey(&q[j][0], q[j].size, key, mac);
 			if (j != MAX_LAYER - 1){
                 q[j + 1].push_back(lsm_kv(q[j][0].lba, key, mac, pos));
 			}
@@ -67,6 +69,7 @@ void mhbt_write(lsm_kv *lv, int size, vector<char> &output) {
 	int pos = 0;
 	int len = BLOCK_SIZE / 16;
 
+	char *cipher_text = new char[BLOCK_SIZE];
 	for (int i = 0; i < size; i++) {
 		q[0].push_back(lv[i]);
 
@@ -78,8 +81,7 @@ void mhbt_write(lsm_kv *lv, int size, vector<char> &output) {
 			memcpy(plain_text, &q[j][0], BLOCK_SIZE);
 			char key[16];
 			char mac[16];
-			char cipher_text[BLOCK_SIZE];
-			encrypt(plain_text, BLOCK_SIZE, cipher_text, key, mac);
+			encrypt(plain_text, BLOCK_SIZE, &cipher_text, key, mac);
 			for (int i = 0; i < BLOCK_SIZE; i++)
 				output.push_back(cipher_text[i]);
 			memcpy(&_key, key, 4);
@@ -93,20 +95,17 @@ void mhbt_write(lsm_kv *lv, int size, vector<char> &output) {
 
 	for (int j = 0; j < MAX_LAYER; j++) {
 		int _key = -1, _mac = -1;
-
 		int padlen = len - q[j].size();
 		for (int i = 0; i < padlen; i++)
 			q[j].push_back(lsm_kv(-1, -1, -1, -1));
-			
 		char plain_text[BLOCK_SIZE];
 		memcpy(plain_text, &q[j][0], BLOCK_SIZE);
 		char key[16];
 		char mac[16];
-		char cipher_text[BLOCK_SIZE];
-		if (j != 5)
-			encrypt(plain_text, BLOCK_SIZE, cipher_text, key, mac);
+		if (j != MAX_LAYER - 1)
+			encrypt(plain_text, BLOCK_SIZE, &cipher_text, key, mac);
 		else {
-			encrypt0(plain_text, BLOCK_SIZE, cipher_text, mac);
+			encrypt0(plain_text, BLOCK_SIZE, &cipher_text, mac);
 		}
 		for (int i = 0; i < BLOCK_SIZE; i++)
 			output.push_back(cipher_text[i]);
@@ -120,6 +119,8 @@ void mhbt_write(lsm_kv *lv, int size, vector<char> &output) {
         pos++;
         q[j].clear();
 	}
+	delete[] cipher_text;
+	
 }
 
 int read_mhbt(int num, int pos, int lba, lsm_kv *value){
@@ -128,9 +129,13 @@ int read_mhbt(int num, int pos, int lba, lsm_kv *value){
 	int len = BLOCK_SIZE / 16;
 	pos = pos / len - 1;
 	int _key = 0;
-	char *plain_text= new char[BLOCK_SIZE];
-	for (int layer = MAX_LAYER - 1; layer >= 0; layer--) {
-		if (!in_cache(pos * 100 + num, (char **)&kv, mhbt_cache)){
+	for (int layer = MAX_LAYER - 1; layer >= 0; layer--) {	
+		kv = (lsm_kv*)find_in_cache(pos * 100 + num, mhbt_cache);
+		//printf("%d  %d\n", pos*100+ num, kv == nullptr);
+		if (kv == nullptr){
+			//printf("sst block not find in cache! %d\n", xxx);
+			xxx++;
+			char *plain_text;
 			char buf[BLOCK_SIZE];
 			sst_read_pos(num, pos, buf);
 			char key[16];
@@ -141,11 +146,33 @@ int read_mhbt(int num, int pos, int lba, lsm_kv *value){
 			decrypt(&plain_text, BLOCK_SIZE, buf, key, mac);
 			kv = (lsm_kv*)plain_text;
 			put_to_cache(pos * 100 + num, (char *)kv, mhbt_cache);
+			for (j = 0; j < len; j++)
+			if (kv[j].lba > lba || kv[j].lba == -1)
+				break;
+			if (j == 0) {
+				//printf("Not found in mhbt\n");
+				return 0;
+			}
+			pos = kv[j - 1].pba;
+			_key = kv[j - 1].key;
+			
+			if (layer == 0){
+				if (kv[j - 1].lba == lba) {
+					*value = kv[j - 1];
+					//printf("Found in mhbt\n");
+					return 1;
+				}
+				else {
+					//printf("Not found in mhbt\n");
+					return 0;
+				}
+			}
+			free(plain_text);
 		}
 		else{
-			//printf("sst block find in cache!\n");
-		}
+		//	printf("sst block find in cache!\n");
 		
+
 		for (j = 0; j < len; j++)
 			if (kv[j].lba > lba || kv[j].lba == -1)
 				break;
@@ -167,6 +194,6 @@ int read_mhbt(int num, int pos, int lba, lsm_kv *value){
 				return 0;
 			}
 		}
+		}
 	}
-	delete[] plain_text;
 }

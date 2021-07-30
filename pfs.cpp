@@ -22,7 +22,6 @@ int main(int argc, char **argv)
 	printf("%% ");
 	aes_init();
 	init_cache();
-	write_test(1);
 	char *c = new char(BLOCK_SIZE);
 	while(fgets(input, 256, stdin)) {
 		bzero(comm,64); 

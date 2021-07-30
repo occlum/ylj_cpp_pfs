@@ -50,7 +50,7 @@ void aes_128_gcm_encrypt0(const char* plaintext, size_t plaintext_len,
 				unsigned char ** out, size_t & out_len) {
 
 	size_t output_length = AES_BLOCK_SIZE + AES_BLOCK_SIZE + plaintext_len;
-	unsigned char *output = new unsigned char[output_length];
+	unsigned char *output = (unsigned char*)malloc(output_length);
 	for (int i = 0; i < output_length; i++)
 		output[i] = 0;
 	//RAND_bytes(output+16, 16);
@@ -61,9 +61,34 @@ void aes_128_gcm_encrypt0(const char* plaintext, size_t plaintext_len,
 	EVP_EncryptUpdate(e_ctx, &output[32], &actual_size, (const unsigned char*)plaintext, plaintext_len);
 	EVP_EncryptFinal(e_ctx, &output[32 + actual_size], &final_size);
 	EVP_CIPHER_CTX_ctrl(e_ctx, EVP_CTRL_GCM_GET_TAG, 16, output);
-	
 	*out = output;
 	out_len = output_length;
+}
+
+void encrypt0(char *text, size_t text_len, char **cipher_text, char *mac)
+{
+	char key[16];
+	for (int i = 0; i < 16; i++)
+		key[i] = 0;
+	size_t out_len;
+	char* _cipher;
+	aes_128_gcm_encrypt0(text, text_len, key, (unsigned char**)&_cipher, out_len);
+	memcpy(mac, _cipher, 16);
+	memcpy(*cipher_text, _cipher + 32, text_len);
+	free(_cipher);
+}
+
+void encrypt(char *text, size_t text_len, char **cipher_text, char *key, char *mac)
+{
+	RAND_bytes((unsigned char*)key, 4);
+	for (int i = 4; i < 16; i++)
+		key[i] = 0;
+	size_t out_len;
+	char* _cipher;
+	aes_128_gcm_encrypt0(text, text_len, key, (unsigned char**)&_cipher, out_len);
+	memcpy(mac, _cipher, 16);
+	memcpy(*cipher_text, _cipher + 32, text_len);
+	free(_cipher);
 }
 
 int aes_128_gcm_decrypt0(const char* ciphertext, size_t ciphertext_len,
@@ -81,31 +106,6 @@ int aes_128_gcm_decrypt0(const char* ciphertext, size_t ciphertext_len,
 	*out = plaintext;
 	out_len = ciphertext_len - 32;
 	return ret;
-}
-
-void encrypt0(char *text, size_t text_len, char *cipher_text, char *mac)
-{
-	char key[16];
-	for (int i = 0; i < 16; i++)
-		key[i] = 0;
-	size_t out_len;
-	char* _cipher;
-	aes_128_gcm_encrypt0(text, text_len, key, (unsigned char**)&_cipher, out_len);
-	memcpy(mac, _cipher, 16);
-	memcpy(cipher_text, _cipher + 32, text_len);
-}
-
-
-void encrypt(char *text, size_t text_len, char *cipher_text, char *key, char *mac)
-{
-	RAND_bytes((unsigned char*)key, 4);
-	for (int i = 4; i < 16; i++)
-		key[i] = 0;
-	size_t out_len;
-	char* _cipher;
-	aes_128_gcm_encrypt0(text, text_len, key, (unsigned char**)&_cipher, out_len);
-	memcpy(mac, _cipher, 16);
-	memcpy(cipher_text, _cipher + 32, text_len);
 }
 
 int decrypt(char **text, size_t text_len, char *cipher_text, char *key, char *mac)

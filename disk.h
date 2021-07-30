@@ -1,12 +1,8 @@
 #define BLOCK_SIZE 4096
 #define MAX_BLOCK 4096
+#define BUFFER 64
 
 extern char disk[MAX_BLOCK][BLOCK_SIZE];
-
-//struct key_mac{
-//	int key;
-//	int mac;
-//};
 
 int disk_read(int block, char *buf);
 int disk_write(int block, char *buf);

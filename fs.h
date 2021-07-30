@@ -57,3 +57,5 @@ int file_create(char *name ,int size);
 int file_remove(char *name);
 
 void write_test(int lba);
+int test_write(int round);
+int test_read(int round);

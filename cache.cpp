@@ -2,13 +2,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <vector>
-#include <map>
+#include <hash_map>
 #include <string>
 #include <list>
 #include "cache.h"
 #include "disk.h"
 
 using namespace std;
+using namespace __gnu_cxx;
 
 class LRUCache {  
 public:
@@ -28,10 +29,10 @@ public:
         cache.clear();
     }  
   
-    char *get(int key, bool &flag) 
+    char *get(int key) 
     {  
-        char *retValue;
-        map<int, list<pair<int, char[BLOCK_SIZE]>> :: iterator> ::iterator it = cache_Map.find(key);
+        char *retValue = nullptr;
+        hash_map<int, list<pair<int, char[BLOCK_SIZE]>> :: iterator> ::iterator it = cache_Map.find(key);
         if (it != cache_Map.end()) {
             retValue = it->second->second;
             list<pair<int, char[BLOCK_SIZE]>> :: iterator ptrPair = it -> second;
@@ -39,16 +40,14 @@ public:
             cache.erase(ptrPair);
             cache.push_front(tmpPair);
             cache_Map[key] = cache.begin();
-            flag = true;
         }
-        else 
-            flag = false;
         return retValue;          
     }
   
-    void set(int key, char *value) 
+    char *set(int key, char *value, int &pop_key) 
     {  
-        map<int, list<pair<int, char[BLOCK_SIZE]>> :: iterator> :: iterator it = cache_Map.find(key);  
+        char *retValue = nullptr;
+        hash_map<int, list<pair<int, char[BLOCK_SIZE]>> :: iterator> :: iterator it = cache_Map.find(key);  
         if (it != cache_Map.end()) {  
             list<pair<int, char[BLOCK_SIZE]>> :: iterator ptrPait = it ->second;
             memcpy(ptrPait->second, value, BLOCK_SIZE);
@@ -64,34 +63,59 @@ public:
   
             if (m_capacity == cache.size()) {
                 int delKey = cache.back().first;
+                retValue = new char[BLOCK_SIZE];
+                memcpy(retValue, cache.back().second, BLOCK_SIZE);
+                pop_key = delKey;
                 cache.pop_back();
-                map<int, list<pair<int, char[BLOCK_SIZE]>> :: iterator> :: iterator delIt = cache_Map.find(delKey);
+                hash_map<int, list<pair<int, char[BLOCK_SIZE]>> :: iterator> :: iterator delIt = cache_Map.find(delKey);
                 cache_Map.erase(delIt);
             }
             cache.push_front(tmpPair);
             cache_Map[key] = cache.begin();
         }
+        return retValue;
+    }
+
+    char *pop(int &lba)
+    {  
+        char *retValue = nullptr;
+        if (cache.size() != 0) {
+            lba = cache.back().first;
+            retValue = new char[BLOCK_SIZE];
+            memcpy(retValue, cache.back().second, BLOCK_SIZE);
+            cache.pop_back();
+            hash_map<int, list<pair<int, char[BLOCK_SIZE]>> :: iterator> :: iterator delIt = cache_Map.find(lba);
+            cache_Map.erase(delIt);
+        }
+        return retValue;
     }
   
     int m_capacity;
     list<pair<int, char[BLOCK_SIZE]>> cache;
-    map<int, list<pair<int, char[BLOCK_SIZE]>> :: iterator> cache_Map;
+    hash_map<int, list<pair<int, char[BLOCK_SIZE]>> :: iterator> cache_Map;
 };
 LRUCache s[2];
 
 int init_cache(){
-    s[0].m_capacity = 25000;
-    s[1].m_capacity = 25000;
+    s[0].m_capacity = 100000;
+    s[1].m_capacity = 100000;
     s[0].clear();
     s[1].clear();
 }
 
-void put_to_cache(int k, char *block, cache_type typ) {
-    s[typ].set(k, block);
+char *put_to_cache(int k, char *block, int &pop_k, cache_type typ) {
+    return s[typ].set(k, block, pop_k);
 }
 
-int in_cache(int k, char **block, cache_type typ) {
-    bool flag;
-	*block = s[typ].get(k, flag);
-    return flag;
+void put_to_cache(int k, char *block, cache_type typ){
+    int pop_k;
+    s[typ].set(k, block, pop_k);
+}
+
+char *find_in_cache(int k, cache_type typ) {
+	return s[typ].get(k);
+}
+
+char *pop(int &lba, cache_type typ){
+    return s[typ].pop(lba);
 }

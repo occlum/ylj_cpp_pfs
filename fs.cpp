@@ -876,16 +876,18 @@ int execute_command(char *comm, char *arg1, char *arg2, char *arg3, char *arg4, 
 			printf("error: read <lba>\n");
 			return -1;
 		}
-		char *buf;
 		int lba = atoi(arg1);
-		if (!in_cache(lba, &buf, data_cache)) {
+		char *buf = find_in_cache(lba, data_cache);
+		if (buf == nullptr) {
 			char buf2[BLOCK_SIZE];
-			data_read(lba, buf2);
-			put_to_cache(lba, buf2, data_cache);
-			//printf("%s\n", buf2);
+			int ret = data_read(lba, buf2);
+			if (ret != -1) {
+				put_to_cache(lba, buf2, data_cache);
+				printf("%s\n", buf2);
+			}
 		}
 		else {
-			//printf("%s\n", buf);
+			printf("%s\n", buf);
 		}
 	} else if (command(comm, "write_random")){
 		if(numArg < 1) {
@@ -896,6 +898,7 @@ int execute_command(char *comm, char *arg1, char *arg2, char *arg3, char *arg4, 
 		for (int i = 0; i < 128; i++)
 			buf[i] = rand() % 26 + 'a';
 		buf[128] = '\0';
+		printf("%s\n", buf);
 		superBlock.data_size += 1;
 		int lba = atoi(arg1);
 		data_write(lba, buf, superBlock.data_size - 1);
@@ -945,12 +948,60 @@ int execute_command(char *comm, char *arg1, char *arg2, char *arg3, char *arg4, 
 	return 0;
 }
 
+void clean_cache(cache_type typ){
+	int lba;
+	char *buf;
+	while ((buf=pop(lba, typ)) != nullptr) {
+		data_write(lba, buf, superBlock.data_size);
+		superBlock.data_size += 1;
+		free(buf);
+	}
+}
+
+int xx = 0;
+
 void write_test(int lba){
 	char buf[BLOCK_SIZE];
-	for (int i = 0; i < 128; i++)
+	for (int i = 0; i < 5; i++)
 		buf[i] = rand() % 26 + 'a';
 	buf[128] = '\0';
-	superBlock.data_size += 1;
-	data_write(lba, buf, superBlock.data_size - 1);
-	put_to_cache(lba, buf, data_cache);
+	int pop_lba;
+	char *buf2 = put_to_cache(lba, buf, pop_lba, data_cache);
+	//printf("%d %s %d %s\n", lba, buf, pop_lba, buf2);
+	if (buf2 != nullptr) {
+		data_write(pop_lba, buf, superBlock.data_size);
+		superBlock.data_size += 1;
+		xx++;
+		free(buf2);
+	}
+}
+
+int test_write(int round) {
+    for (int i = 0; i < round; i++) {
+        int lba = rand() % (1 << 17);
+		//int lba = i;
+        write_test(lba);
+        //printf("%d\n", i);
+    }
+	printf("%d\n", xx);
+	clean_cache(data_cache);
+	C0_to_C1();
+}
+
+int test_read(int round) {
+	for (int i = 0; i < round; i++) {
+		int lba = rand() % (1 << 17);
+		char *buf2 = find_in_cache(lba, data_cache);
+		if (buf2 != nullptr) {
+			//printf("ff\n");
+		}
+		else{
+			char buf[BLOCK_SIZE];
+			data_read(lba, buf);
+		if (i % 10000==0)
+			printf("%d\n", i);
+			put_to_cache(lba, buf, data_cache);
+		}
+	}
+
 }

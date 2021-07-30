@@ -6,6 +6,8 @@
 
 char disk[MAX_BLOCK][BLOCK_SIZE];
 char data_disk[BLOCK_SIZE];
+char buff[BLOCK_SIZE * BUFFER];
+int buf_size = 0;
 
 int disk_read(int block, char *buf)
 {
@@ -55,9 +57,10 @@ int disk_umount(char *name)
 
 int data_disk_read(char *name, int block, char *buf)
 {
+
 	FILE *fp = fopen(name, "r");
 	if (fp != NULL) {
-		fseek(fp, block * BLOCK_SIZE, 0);
+		fseek(fp, (long long)block * BLOCK_SIZE, 0);
 		fread(data_disk, BLOCK_SIZE, 1, fp);
 		memcpy(buf, data_disk, BLOCK_SIZE);
 		fclose(fp);
@@ -68,12 +71,16 @@ int data_disk_read(char *name, int block, char *buf)
 
 int data_disk_write(char *name, int block, char *buf)
 {
-	FILE *fp = fopen(name, "a");
-	if (fp != NULL) {
-		memcpy(data_disk, buf, BLOCK_SIZE);
-		fwrite(data_disk, BLOCK_SIZE, 1, fp);
-		fclose(fp);
-		return 1;
+	memcpy(buff + buf_size * BLOCK_SIZE, buf, BLOCK_SIZE);
+	buf_size++;
+	if (buf_size == BUFFER) {
+		FILE *fp = fopen(name, "a");
+		buf_size = 0;
+		if (fp != NULL) {
+			fwrite(buff, BLOCK_SIZE, BUFFER, fp);
+			fclose(fp);
+			return 1;
+		}
 	}
 	return 0;
 }
@@ -105,7 +112,7 @@ int small_sst_write(char *name, int sst_size, char *buf)
 int sst_read(char *name, int sst_size, char *buf)
 {
 	FILE *fp = fopen(name, "r");
-	int buf_len = sst_size * 16;
+	long long buf_len = sst_size * 16LL;
 	if (fp != NULL) {
 		fread(buf, BLOCK_SIZE, buf_len / BLOCK_SIZE, fp);
 		fclose(fp);
@@ -117,9 +124,9 @@ int sst_read(char *name, int sst_size, char *buf)
 int sst_write(char *name, int sst_size, char *buf)
 {
 	FILE *fp = fopen(name, "w");
-	int buf_len = sst_size * 16;
+	long long buf_len = sst_size * 16LL;
 	if (fp != NULL) {
-		fwrite(buf, BLOCK_SIZE, buf_len / BLOCK_SIZE, fp);
+		fwrite(buf, BLOCK_SIZE, buf_len / BLOCK_SIZE + (buf_len % BLOCK_SIZE == 0), fp);
 		fclose(fp);
 		return 1;
 	}
@@ -130,7 +137,7 @@ int sst_read_index(char *name, int index, char *buf)
 {
 	FILE *fp = fopen(name, "r");
 	if (fp != NULL) {
-		fseek(fp, index * 16, 0);
+		fseek(fp, (long long)index * 16, 0);
 		fread(buf, 16, 1, fp);
 		fclose(fp);
 		return 1;
@@ -141,13 +148,13 @@ int sst_read_index(char *name, int index, char *buf)
 int sst_read_pos(int num, int pos, char *buf)
 {
 	char name[20];
-        snprintf(name, sizeof(name), "sst_%d", num);
-        FILE *fp = fopen(name, "r");
-        if (fp != NULL) {
-                fseek(fp, pos * BLOCK_SIZE, 0);
-                fread(buf, BLOCK_SIZE, 1, fp);
-                fclose(fp);
-                return 1;
-        }
-        return 0;
+	snprintf(name, sizeof(name), "sst_%d", num);
+	FILE *fp = fopen(name, "r");
+	if (fp != NULL) {
+			fseek(fp, (long long)pos * BLOCK_SIZE, 0);
+			fread(buf, BLOCK_SIZE, 1, fp);
+			fclose(fp);
+			return 1;
+	}
+	return 0;
 }

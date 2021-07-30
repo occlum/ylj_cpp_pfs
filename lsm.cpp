@@ -88,12 +88,12 @@ lsm_kv lsm_find(int lba)
 {
 	map<int, lsm_kv>::iterator iter;
 	iter = lsm_C0.find(lba);
-	if (iter != lsm_C0.end()) 
-		return iter->second;
+	if (iter != lsm_C0.end()) {
+		return iter->second;	
+	}
 	else {
 		lsm_kv kv(-1, 0, 0, 0);
 		for (int i = *sst_file_count - 1; i >= 0; i--) {
-//			if (sst_find(i, lba, &kv)) {
 			if (read_mhbt(i, sst_file_size[i], lba, &kv)) {
 				return kv;
 			}
@@ -132,8 +132,9 @@ int C0_to_C1()
 
 int lsm_insert(lsm_kv kv){
 	lsm_C0[kv.lba] = kv;
-	if (lsm_C0.size() > 6250000)
-		return C0_to_C1();
+	if (lsm_C0.size() > 2000000) {
+		C0_to_C1();
+	}
 }
 
 int data_write(int lba, char *buf, int pba){
@@ -141,34 +142,38 @@ int data_write(int lba, char *buf, int pba){
 	char *data_file_name = "data";
 	char key[16];
 	char mac[16];
-	char cipher_text[BLOCK_SIZE];
-	encrypt(buf, BLOCK_SIZE, cipher_text, key, mac);
+	char *cipher_text = new char[BLOCK_SIZE];
+	encrypt(buf, BLOCK_SIZE, &cipher_text, key, mac);
     ret = data_disk_write(data_file_name, pba, cipher_text);
 	int ki;
 	memcpy(&ki, key, 4);
     lsm_kv kv(lba, ki, -1, pba);
     lsm_insert(kv);
+	delete[] cipher_text;
     return ret;
 }
 
 int data_read(int lba, char *buf){
     char *data_file_name = "data";
     lsm_kv kv = lsm_find(lba);
+	//lsm_kv kv(0, 0, -1, -1);
 	if (kv.lba == -1) {
-		printf("Block %d not found!\n", lba);
+		//printf("Block %d not found!\n", lba);
 		return -1;
 	}
 	else {
        	data_disk_read(data_file_name, kv.pba, buf);
 		char key[16];
 		char mac[16];
-		char *plain_text= new char[BLOCK_SIZE];
+		char *plain_text;
 		memcpy(key, &kv.key, 4);
 		for (int i = 4; i < 16; i++)
 			key[i] = 0;
 		decrypt(&plain_text, BLOCK_SIZE, buf, key, mac);
+		//size_t out_len;
+		//aes_128_gcm_decrypt0(buf, BLOCK_SIZE + 32, key, (unsigned char**)&plain_text, out_len);
 		memcpy(buf, plain_text, BLOCK_SIZE);
-		delete[] plain_text;
+		free(plain_text);
 	}
 }
 
